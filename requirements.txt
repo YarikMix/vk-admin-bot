@@ -1,0 +1,4 @@
+vk_api==11.9.1
+pytils==0.3
+requests==2.22.0
+PyYAML==5.4.1
