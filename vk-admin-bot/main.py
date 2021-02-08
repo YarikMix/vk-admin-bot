@@ -29,6 +29,7 @@ class Utils(object):
         attachment = "photo{}_{}".format(response["owner_id"], response["id"])
         return attachment
 
+
 class User(object):
     """Функции для работы с пользователем"""
     def __init__(self, vk, upload):
@@ -69,36 +70,54 @@ class User(object):
         return ""
 
     def get_user_photos(self):
-        count = self.user_info["counters"]["photos"]
-        return f"{count} фото\n"
+        if "photos" in self.user_info["counters"]:
+            count = self.user_info["counters"]["photos"]
+            return f"{count} фото\n"
+        else:
+            return ""
 
     def get_user_audios(self):
-        count = self.user_info["counters"]["audios"]
-        return "{}\n".format(
-            numeral.get_plural(count, "аудиозапись, аудиозаписи, аудиозаписей")
-        )
+        if "audios" in self.user_info["counters"]:
+            count = self.user_info["counters"]["audios"]
+            return "{}\n".format(
+                numeral.get_plural(count, "аудиозапись, аудиозаписи, аудиозаписей")
+            )
+        else:
+            return ""
 
     def get_user_videos(self):
-        count = self.user_info["counters"]["videos"]
-        return f"{count} видео\n"
+        if "videos" in self.user_info["counters"]:
+            count = self.user_info["counters"]["videos"]
+            return f"{count} видео\n"
+        else:
+            return ""
 
     def get_user_friends(self):
-        count = self.user_info["counters"]["friends"]
-        return "{}\n".format(
-            numeral.get_plural(count, "друг, друга, друзей")
-        )
+        if "friends" in self.user_info["counters"]:
+            count = self.user_info["counters"]["friends"]
+            return "{}\n".format(
+                numeral.get_plural(count, "друг, друга, друзей")
+            )
+        else:
+            return ""
 
     def get_user_followers(self):
-        count = self.user_info["counters"]["followers"]
-        return "{}\n".format(
-            numeral.get_plural(count, "подписчик, подписчика, подписчиков")
-        )
+        if "followers" in self.user_info["counters"]:
+            count = self.user_info["counters"]["followers"]
+            return "{}\n".format(
+                numeral.get_plural(count, "подписчик, подписчика, подписчиков")
+            )
+        else:
+            return ""
 
     def get_user_groups(self):
-        count = self.user_info["counters"]["groups"]
-        return "{}\n".format(
-            numeral.get_plural(count, "группа, группы, групп")
-        )
+        if "groups" in self.user_info["counters"]:
+            count = self.user_info["counters"]["groups"]
+            return "{}\n".format(
+                numeral.get_plural(count, "группа, группы, групп")
+            )
+        else:
+            return ""
 
     def get_user_info(self, user_id):
         self.user_info = self.vk.users.get(
@@ -137,6 +156,7 @@ class User(object):
             "message": res,
             "attachment": self.get_user_profile_photo(user_id)
         }
+
 
 class Group(object):
     # Функции для работы с группами
@@ -181,6 +201,7 @@ class Group(object):
             "attachment": self.Utils.get_photo_by_url(photo_url)
         }
 
+
 class Chat(object):
     def __init__(self, vk, upload, bot):
         self.vk = vk
@@ -194,9 +215,22 @@ class Chat(object):
             upload = self.upload
         )
 
+    def get_chat_photo(self, chat_info):
+        """Вовращает фото беседы если оно у неё есть,
+        иначе вовращает пустую строку."""
+        if "photo" in chat_info:
+            sizes = chat_info["photo"]
+            max_size = list(sizes)[-2]
+            photo_url = sizes[max_size]
+
+            return self.Utils.get_photo_by_url(photo_url)
+        else:
+            return ""
+
     def get_chat_info(self, chat_id):
         """Отправляет сообщение с информацией о беседе."""
-        chat_info = self.vk.messages.getConversationsById(
+
+        chat_info = self.bot.messages.getConversationsById(
             peer_ids=2000000000 + chat_id,
             group_id=config["group"]["group_id"]
         )["items"][0]["chat_settings"]
@@ -205,23 +239,25 @@ class Chat(object):
         members_count = chat_info["members_count"]
         owner_id = chat_info["owner_id"]
 
-        # Получаем url фото
-        sizes = self.vk.messages.getConversationsById(
-            peer_ids=2000000000 + chat_id,
-            group_id=config["group"]["group_id"]
-        )["items"][0]["chat_settings"]["photo"]
-        max_size = list(sizes)[-2]
-        photo_url = sizes[max_size]
+        chat_photo = self.get_chat_photo(chat_info)
 
-        res = "{} {} {} {}".format(
-            f"Название - {chat_name}\n",
-            "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников")),
-            f"Создатель - {self.User.get_username(owner_id)}\n",
-            "Аватарка"
-        )
+        if chat_photo != "":
+            res = "{} {} {} {}".format(
+                f"Название - {chat_name}\n",
+                "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников")),
+                f"Создатель - {self.User.get_username(owner_id)}\n",
+                "Аватарка"
+            )
+        else:
+            res = "{} {} {}".format(
+                f"Название - {chat_name}\n",
+                "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников")),
+                f"Создатель - {self.User.get_username(owner_id)}\n"
+            )
+
         return {
             "message": res,
-            "attachment": self.Utils.get_photo_by_url(photo_url)
+            "attachment": chat_photo
         }
 
     def check_rights(self, user_id, chat_id):
@@ -241,14 +277,34 @@ class Chat(object):
         return is_admin
 
     def ban_user(self, from_id, user_id, chat_id):
-        if self.check_rights(from_id, chat_id):
+        if from_id == user_id:
+            self.bot.messages.send(
+                chat_id=chat_id,
+                message="Вы не можете забанить себя",
+                random_id=get_random_id()
+            )
+
+        elif not self.check_rights(from_id, chat_id):
+            self.bot.messages.send(
+                chat_id=chat_id,
+                message="У вас недостаточно прав для использования этой команды",
+                random_id=get_random_id()
+            )
+
+        elif self.check_rights(from_id, chat_id):
             self.bot.messages.removeChatUser(
                 chat_id=chat_id,
                 user_id=user_id
             )
-            return True
-        else:
-            return False
+
+            self.bot.messages.send(
+                chat_id=chat_id,
+                message="Пользователь {} забанен".format(
+                    self.User.get_username(user_id=user_id)
+                ),
+                random_id=get_random_id()
+            )
+
 
 class Bot:
     def auth(self):
@@ -325,33 +381,18 @@ class Bot:
                     random_id=get_random_id()
                 )
             else:
-                self.bot.messages(
+                self.bot.messages.send(
                     chat_id=self.chat_id,
                     message="Такой команды не существует",
                     random_id=get_random_id()
                 )
         elif re.match("!бан id", received_message):
             user_id = int(received_message[7:16])
-            success = self.Chat.ban_user(
+            self.Chat.ban_user(
                 from_id=self.from_id,
                 user_id=user_id,
                 chat_id=self.chat_id
             )
-
-            if success:
-                self.bot.messages.send(
-                    chat_id=self.chat_id,
-                    message="Пользователь {} забанен".format(
-                        self.User.get_username(user_id=user_id)
-                    ),
-                    random_id=get_random_id()
-                )
-            else:
-                self.bot.messages.send(
-                    chat_id=self.chat_id,
-                    message="У вас недостаточно прав для использования этой команды",
-                    random_id=get_random_id()
-                )
         elif received_message == "!help":
             self.bot.messages.send(
                 chat_id=self.chat_id,
