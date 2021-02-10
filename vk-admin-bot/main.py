@@ -307,19 +307,18 @@ class Chat(object):
 
 
 class Bot:
-    def auth(self):
-        """Авторизация бота."""
-        self.authorize = vk_api.VkApi(token=config["group"]["group_token"])
+    def __init__(self):
+        authorize = vk_api.VkApi(token=config["group"]["group_token"])
         self.longpoll = VkBotLongPoll(
-            self.authorize,
+            authorize,
             group_id=config["group"]["group_id"]
         )
 
-        self.upload = vk_api.VkUpload(self.authorize)
-        self.bot = self.authorize.get_api()
+        self.upload = vk_api.VkUpload(authorize)
+        self.bot = authorize.get_api()
 
         vk_session = vk_api.VkApi(
-            token=config["access_token"]["token"]
+            token=config["user"]["user_token"]
         )
 
         self.vk = vk_session.get_api()
@@ -401,17 +400,19 @@ class Bot:
             )
 
     def run(self):
-        self.auth()
-
         print("Начинаю мониторинг сообщений...")
 
-        """Отслеживаем каждое событие в беседе."""
-        for event in self.longpoll.listen():
-            if event.type == VkBotEventType.MESSAGE_NEW and event.from_chat and event.message.get("text") != "":
-                received_message = event.message.get("text").lower().replace("[", "").replace("]", "")
-                self.chat_id = event.chat_id
-                self.from_id = event.message.get("from_id")
-                self.check_message(received_message)
+        while True:
+            try:
+                """Отслеживаем каждое событие в беседе."""
+                for event in self.longpoll.listen():
+                    if event.type == VkBotEventType.MESSAGE_NEW and event.from_chat and event.message.get("text") != "":
+                        received_message = event.message.get("text").lower().replace("[", "").replace("]", "")
+                        self.chat_id = event.chat_id
+                        self.from_id = event.message.get("from_id")
+                        self.check_message(received_message)
+            except Exception as e:
+                print(e)
 
 
 if __name__ == "__main__":
