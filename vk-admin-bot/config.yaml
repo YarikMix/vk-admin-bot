@@ -1,5 +1,5 @@
 group:
   group_id: ""  # id группы
-  group_token: ""  # Ключ сообщества
+  group_token: ""  # Токен группы
 user:
-  user_token: ""  # Ваш токен c правами messages
+  user_token: ""  # Ваш токен
