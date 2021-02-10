@@ -45,7 +45,7 @@ class User(object):
         )
         return f"[id{user_id}|{username}]"
 
-    def get_user_last_activity(self, user_id):
+    def get_user_last_activity(self, user_id, sex):
         last_activity = self.vk.messages.getLastActivity(
             user_id=user_id
         )
@@ -53,7 +53,12 @@ class User(object):
             return "Сейчас онлайн\n"
         else:
             delta = time.time() - last_activity["time"]
-            return f"Был в сети {get_time(delta)} назад\n"
+            if sex == 1:
+                return f"Была в сети {get_time(delta)} назад\n"
+            elif sex == 2:
+                return f"Был в сети {get_time(delta)} назад\n"
+            else:
+                pass  # Attack helicopter
 
     def get_user_profile_photo(self, user_id):
         photo_id = self.vk.photos.get(
@@ -122,25 +127,30 @@ class User(object):
     def get_user_info(self, user_id):
         self.user_info = self.vk.users.get(
             user_ids=user_id,
-            fields="status, counters"
+            fields="sex, status, counters"
         )[0]
 
         if self.user_info["is_closed"]:
             # Профиль пользователя закрыт
-            res = "{} {} {} {} {} {}".format(
+            res = "{} {} {} {} {}".format(
                 f"{self.get_username(user_id)}\n",
                 f"id - {user_id}\n",
-                self.get_user_last_activity(user_id),
+                self.get_user_last_activity(user_id, self.user_info["sex"]),
                 self.get_user_status(),
-                "Профиль закрыт ❌\n",
-                "Аватарка"
+                "Профиль закрыт ❌\n"
             )
+
+            return {
+                "message": res,
+                "attachment": ""
+            }
+
         else:
             # Профиль пользователя открыт
             res = "{} {} {} {} {} {} {} {} {} {} {} {}".format(
                 f"{self.get_username(user_id)}\n",
                 f"id - {user_id}\n",
-                self.get_user_last_activity(user_id),
+                self.get_user_last_activity(user_id, self.user_info["sex"]),
                 self.get_user_status(),
                 "Профиль открыт ✅\n",
                 self.get_user_photos(),
@@ -152,10 +162,10 @@ class User(object):
                 "Аватарка"
             )
 
-        return {
-            "message": res,
-            "attachment": self.get_user_profile_photo(user_id)
-        }
+            return {
+                "message": res,
+                "attachment": self.get_user_profile_photo(user_id)
+            }
 
 
 class Group(object):
@@ -414,7 +424,7 @@ class Bot:
             except Exception as e:
                 print(e)
 
-
+                
 if __name__ == "__main__":
     VkBot = Bot()
     VkBot.run()
