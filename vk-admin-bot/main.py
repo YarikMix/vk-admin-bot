@@ -60,74 +60,102 @@ class User(object):
             else:
                 pass  # Attack helicopter
 
-    def get_user_profile_photo(self, user_id):
-        photo_id = self.vk.photos.get(
-            owner_id=user_id,
-            album_id="profile"
-        )["items"][-1]["id"]
-        attachment = "photo{}_{}".format(user_id, photo_id)
-        return attachment
+    def get_user_profile_photo(self):
+        photo_url = self.user_info["photo_max_orig"]
+        if photo_url == "https://vk.com/images/camera_400.png":
+            # У пользователя нет аватарки
+            return False
+        else:
+            attachment = self.Utils.get_photo_by_url(photo_url)
+            return attachment
 
     def get_user_status(self):
+        """Возвращает статус пользователя"""
         status = self.user_info["status"]
         if status != "":
             return f"Статус: {status}\n"
-        return ""
+        else:
+            # Статус не указан
+            return ""
 
     def get_user_photos(self):
         if "photos" in self.user_info["counters"]:
             count = self.user_info["counters"]["photos"]
-            return f"{count} фото\n"
+            if count != 0:
+                return f"{count} фото\n"
+            else:
+                # Фотографий нет
+                return ""
         else:
             return ""
 
     def get_user_audios(self):
         if "audios" in self.user_info["counters"]:
             count = self.user_info["counters"]["audios"]
-            return "{}\n".format(
-                numeral.get_plural(count, "аудиозапись, аудиозаписи, аудиозаписей")
-            )
+            if count != 0:
+                return "{}\n".format(
+                    numeral.get_plural(count, "аудиозапись, аудиозаписи, аудиозаписей")
+                )
+            else:
+                # Аудиозаписи скрыты или их нет
+                return ""
         else:
             return ""
 
     def get_user_videos(self):
         if "videos" in self.user_info["counters"]:
             count = self.user_info["counters"]["videos"]
-            return f"{count} видео\n"
+            if count != 0:
+                return f"{count} видео\n"
+            else:
+                # Видео скрыты или их нет
+                return ""
         else:
             return ""
 
     def get_user_friends(self):
         if "friends" in self.user_info["counters"]:
             count = self.user_info["counters"]["friends"]
-            return "{}\n".format(
-                numeral.get_plural(count, "друг, друга, друзей")
-            )
+            if count != 0:
+                return "{}\n".format(
+                    numeral.get_plural(count, "друг, друга, друзей")
+                )
+            else:
+                # Друзья скрыты или их нет
+                return ""
         else:
             return ""
 
     def get_user_followers(self):
         if "followers" in self.user_info["counters"]:
             count = self.user_info["counters"]["followers"]
-            return "{}\n".format(
-                numeral.get_plural(count, "подписчик, подписчика, подписчиков")
-            )
+            if count != 0:
+                return "{}\n".format(
+                    numeral.get_plural(count, "подписчик, подписчика, подписчиков")
+                )
+            else:
+                # Подписчики скрыты или их нет
+                return ""
         else:
             return ""
 
     def get_user_groups(self):
         if "groups" in self.user_info["counters"]:
             count = self.user_info["counters"]["groups"]
-            return "{}\n".format(
-                numeral.get_plural(count, "группа, группы, групп")
-            )
+            if count != 0:
+                return "{}\n".format(
+                    numeral.get_plural(count, "группа, группы, групп")
+                )
+            else:
+                # Группы скрыты или их нет
+                return ""
         else:
             return ""
 
     def get_user_info(self, user_id):
         self.user_info = self.vk.users.get(
             user_ids=user_id,
-            fields="sex, status, counters"
+            fields="sex, status, counters, photo_max_orig"
         )[0]
 
         if self.user_info["is_closed"]:
@@ -140,14 +168,23 @@ class User(object):
                 "Профиль закрыт ❌\n"
             )
 
-            return {
-                "message": res,
-                "attachment": ""
-            }
-
+            if self.get_user_profile_photo():
+                # У пользователя есть аватарка
+                res += "Аватарка"
+                return {
+                    "message": res,
+                    "attachment": self.get_user_profile_photo()
+                }
+            else:
+                # У пользователя нет аватарки
+                res += "Аватарки нет"
+                return {
+                    "message": res,
+                    "attachment": ""
+                }
         else:
             # Профиль пользователя открыт
-            res = "{} {} {} {} {} {} {} {} {} {} {} {}".format(
+            res = "{} {} {} {} {} {} {} {} {} {} {}".format(
                 f"{self.get_username(user_id)}\n",
                 f"id - {user_id}\n",
                 self.get_user_last_activity(user_id, self.user_info["sex"]),
@@ -158,14 +195,23 @@ class User(object):
                 self.get_user_videos(),
                 self.get_user_friends(),
                 self.get_user_followers(),
-                self.get_user_groups(),
-                "Аватарка"
+                self.get_user_groups()
             )
 
-            return {
-                "message": res,
-                "attachment": self.get_user_profile_photo(user_id)
-            }
+            if self.get_user_profile_photo():
+                # У пользователя есть аватарка
+                res += "Аватарка"
+                return {
+                    "message": res,
+                    "attachment": self.get_user_profile_photo()
+                }
+            else:
+                # У пользователя нет аватарки
+                res += "Аватарки нет"
+                return {
+                    "message": res,
+                    "attachment": ""
+                }
 
 
 class Group(object):
@@ -412,17 +458,14 @@ class Bot:
     def run(self):
         print("Начинаю мониторинг сообщений...")
 
-        while True:
-            try:
-                """Отслеживаем каждое событие в беседе."""
-                for event in self.longpoll.listen():
-                    if event.type == VkBotEventType.MESSAGE_NEW and event.from_chat and event.message.get("text") != "":
-                        received_message = event.message.get("text").lower().replace("[", "").replace("]", "")
-                        self.chat_id = event.chat_id
-                        self.from_id = event.message.get("from_id")
-                        self.check_message(received_message)
-            except Exception as e:
-                print(e)
+
+        """Отслеживаем каждое событие в беседе."""
+        for event in self.longpoll.listen():
+            if event.type == VkBotEventType.MESSAGE_NEW and event.from_chat and event.message.get("text") != "":
+                received_message = event.message.get("text").lower().replace("[", "").replace("]", "")
+                self.chat_id = event.chat_id
+                self.from_id = event.message.get("from_id")
+                self.check_message(received_message)
 
                 
 if __name__ == "__main__":
