@@ -2,4 +2,4 @@ group:
   group_id: ""  # id группы
   group_token: ""  # Токен группы
 user:
-  user_token: ""  # Ваш токен
+  user_token: ""  # Токен пользователя

@@ -35,7 +35,6 @@ class User(object):
     def __init__(self, vk, upload):
         self.vk = vk
         self.upload = upload
-        self.Utils = Utils(upload=upload)
 
     def get_username(self, user_id):
         user_info = self.vk.users.get(user_ids=user_id)[0]
@@ -66,7 +65,7 @@ class User(object):
             # У пользователя нет аватарки
             return False
         else:
-            attachment = self.Utils.get_photo_by_url(photo_url)
+            attachment = utils.get_photo_by_url(photo_url)
             return attachment
 
     def get_user_status(self):
@@ -215,17 +214,10 @@ class User(object):
 
 
 class Group(object):
-    # Функции для работы с группами
+    """Функции для работы с группами"""
     def __init__(self, vk, upload):
         self.vk = vk
         self.upload = upload
-
-        self.Utils = Utils(upload = self.upload)
-
-        self.User = User(
-            vk=vk,
-            upload=upload
-        )
 
     def get_group_owner(self, group_id):
         try:
@@ -233,7 +225,7 @@ class Group(object):
                 group_id=group_id,
                 filter="managers"
             )["items"][0]["id"]
-            return f"Создатель - {self.User.get_username(owner_id)}\n"
+            return f"Создатель - {user.get_username(owner_id)}\n"
 
         except vk_api.exceptions.ApiError:
             return ""
@@ -254,7 +246,7 @@ class Group(object):
 
         return {
             "message": res,
-            "attachment": self.Utils.get_photo_by_url(photo_url)
+            "attachment": utils.get_photo_by_url(photo_url)
         }
 
 
@@ -264,13 +256,6 @@ class Chat(object):
         self.upload = upload
         self.bot = bot
 
-        self.Utils = Utils(upload = self.upload)
-
-        self.User = User(
-            vk = self.vk,
-            upload = self.upload
-        )
-
     def get_chat_photo(self, chat_info):
         """Вовращает фото беседы если оно у неё есть,
         иначе вовращает пустую строку."""
@@ -279,7 +264,7 @@ class Chat(object):
             max_size = list(sizes)[-2]
             photo_url = sizes[max_size]
 
-            return self.Utils.get_photo_by_url(photo_url)
+            return utils.get_photo_by_url(photo_url)
         else:
             return ""
 
@@ -301,14 +286,14 @@ class Chat(object):
             res = "{} {} {} {}".format(
                 f"Название - {chat_name}\n",
                 "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников")),
-                f"Создатель - {self.User.get_username(owner_id)}\n",
+                f"Создатель - {user.get_username(owner_id)}\n",
                 "Аватарка"
             )
         else:
             res = "{} {} {}".format(
                 f"Название - {chat_name}\n",
                 "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников")),
-                f"Создатель - {self.User.get_username(owner_id)}\n"
+                f"Создатель - {user.get_username(owner_id)}\n"
             )
 
         return {
@@ -356,48 +341,18 @@ class Chat(object):
             self.bot.messages.send(
                 chat_id=chat_id,
                 message="Пользователь {} забанен".format(
-                    self.User.get_username(user_id=user_id)
+                    user.get_username(user_id=user_id)
                 ),
                 random_id=get_random_id()
             )
 
 
-class Bot:
-    def __init__(self):
-        authorize = vk_api.VkApi(token=config["group"]["group_token"])
-        self.longpoll = VkBotLongPoll(
-            authorize,
-            group_id=config["group"]["group_id"]
-        )
+class Bot(object):
+    def __init__(self, bot, longpoll):
+        self.bot = bot
+        self.longpoll = longpoll
 
-        self.upload = vk_api.VkUpload(authorize)
-        self.bot = authorize.get_api()
-
-        vk_session = vk_api.VkApi(
-            token=config["user"]["user_token"]
-        )
-
-        self.vk = vk_session.get_api()
-
-        self.Utils = Utils(upload=self.upload)
-
-        self.User = User(
-            vk=self.vk,
-            upload=self.upload
-        )
-
-        self.Group = Group(
-            vk=self.vk,
-            upload=self.upload
-        )
-
-        self.Chat = Chat(
-            vk=self.vk,
-            upload=self.upload,
-            bot=self.bot
-        )
-
-    def get_help(self):
+    def get_help(self, chat_id):
         res = "{}{}{}{}".format(
             "Список команд\n",
             "!инфо беседа\n",
@@ -405,69 +360,108 @@ class Bot:
             "Доступно только администраторам\n"
             "!бан @(Имя пользователя)"
         )
-        return res
 
-    def check_message(self, received_message):
+        self.bot.messages.send(
+            chat_id=chat_id,
+            message=res,
+            random_id=get_random_id()
+        )
+
+    def check_message(self, received_message, chat_id):
         if re.match("!инфо", received_message):
             if received_message == "!инфо беседа":
-                data = self.Chat.get_chat_info(chat_id=self.chat_id)
+                data = chat.get_chat_info(chat_id=chat_id)
                 self.bot.messages.send(
-                    chat_id=self.chat_id,
+                    chat_id=chat_id,
                     message=data["message"],
                     attachment=data["attachment"],
                     random_id=get_random_id()
                 )
             elif re.match("!инфо id", received_message):
                 user_id = int(received_message[8:17])
-                data = self.User.get_user_info(user_id)
+                data = user.get_user_info(user_id)
                 self.bot.messages.send(
-                    chat_id=self.chat_id,
+                    chat_id=chat_id,
                     message=data["message"],
                     attachment=data["attachment"],
                     random_id=get_random_id()
                 )
             elif re.match("!инфо club", received_message):
                 group_id = int(received_message[10:19])
-                data = self.Group.get_group_info(group_id)
+                data = group.get_group_info(group_id)
                 self.bot.messages.send(
-                    chat_id=self.chat_id,
+                    chat_id=chat_id,
                     message=data["message"],
                     attachment=data["attachment"],
                     random_id=get_random_id()
                 )
             else:
                 self.bot.messages.send(
-                    chat_id=self.chat_id,
+                    chat_id=chat_id,
                     message="Такой команды не существует",
                     random_id=get_random_id()
                 )
         elif re.match("!бан id", received_message):
             user_id = int(received_message[7:16])
-            self.Chat.ban_user(
+            chat.ban_user(
                 from_id=self.from_id,
                 user_id=user_id,
-                chat_id=self.chat_id
+                chat_id=chat_id
             )
         elif received_message == "!help":
-            self.bot.messages.send(
-                chat_id=self.chat_id,
-                message=self.get_help(),
-                random_id=get_random_id()
-            )
+            self.get_help(chat_id)
 
     def run(self):
         print("Начинаю мониторинг сообщений...")
-
 
         """Отслеживаем каждое событие в беседе."""
         for event in self.longpoll.listen():
             if event.type == VkBotEventType.MESSAGE_NEW and event.from_chat and event.message.get("text") != "":
                 received_message = event.message.get("text").lower().replace("[", "").replace("]", "")
-                self.chat_id = event.chat_id
+                chat_id = event.chat_id
                 self.from_id = event.message.get("from_id")
-                self.check_message(received_message)
+                self.check_message(received_message, chat_id)
 
                 
 if __name__ == "__main__":
-    VkBot = Bot()
-    VkBot.run()
+    authorize = vk_api.VkApi(token=config["group"]["group_token"])
+    longpoll = VkBotLongPoll(
+        authorize,
+        group_id=config["group"]["group_id"]
+    )
+
+    upload = vk_api.VkUpload(authorize)
+    bot = authorize.get_api()
+
+    vk_session = vk_api.VkApi(
+        token=config["user"]["user_token"]
+    )
+
+    vk = vk_session.get_api()
+
+    vkbot = Bot(
+        longpoll=longpoll,
+        bot=bot
+    )
+
+    utils = Utils(
+        upload=upload
+    )
+
+    user = User(
+        vk=vk,
+        upload=upload
+    )
+
+    group = Group(
+        vk=vk,
+        upload=upload
+    )
+
+    chat = Chat(
+        vk=vk,
+        upload=upload,
+        bot=bot
+    )
+
+    vkbot.run()
