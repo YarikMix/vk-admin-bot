@@ -2,6 +2,7 @@
 import time
 import io
 import re
+from pathlib import Path
 
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
@@ -12,7 +13,11 @@ import requests, yaml
 from functions import get_time
 
 
-with open("config.yaml") as ymlFile:
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = BASE_DIR.joinpath("config.yaml")
+
+
+with open(CONFIG_PATH) as ymlFile:
     config = yaml.load(ymlFile.read(), Loader=yaml.Loader)
 
 
@@ -20,7 +25,7 @@ class Utils(object):
     def __init__(self, upload):
         self.upload = upload
 
-    def get_photo_by_url(self, url):
+    def get_photo_by_url(self, url: str) -> str:
         r = requests.get(url)
         image = io.BytesIO(r.content)
 
@@ -36,7 +41,7 @@ class User(object):
         self.vk = vk
         self.upload = upload
 
-    def get_username(self, user_id):
+    def get_username(self, user_id: int) -> str:
         user_info = self.vk.users.get(user_ids=user_id)[0]
         username = "{} {}".format(
             user_info["first_name"],
@@ -44,7 +49,7 @@ class User(object):
         )
         return f"[id{user_id}|{username}]"
 
-    def get_user_last_activity(self, user_id, sex):
+    def get_user_last_activity(self, user_id: int, sex: int) -> str:
         last_activity = self.vk.messages.getLastActivity(
             user_id=user_id
         )
@@ -59,158 +64,106 @@ class User(object):
             else:
                 pass  # Attack helicopter
 
-    def get_user_profile_photo(self):
+    def get_user_profile_photo(self) -> str:
         photo_url = self.user_info["photo_max_orig"]
         if photo_url == "https://vk.com/images/camera_400.png":
             # У пользователя нет аватарки
-            return False
+            return ""
         else:
             attachment = utils.get_photo_by_url(photo_url)
             return attachment
 
-    def get_user_status(self):
+    def get_user_status(self) -> str:
         """Возвращает статус пользователя"""
         status = self.user_info["status"]
         if status != "":
             return f"Статус: {status}\n"
-        else:
-            # Статус не указан
-            return ""
 
-    def get_user_photos(self):
+        return ""
+
+    def get_user_photos(self) -> str:
         if "photos" in self.user_info["counters"]:
             count = self.user_info["counters"]["photos"]
             if count != 0:
                 return f"{count} фото\n"
-            else:
-                # Фотографий нет
-                return ""
-        else:
-            return ""
+        return ""
 
-    def get_user_audios(self):
+    def get_user_audios(self) -> str:
         if "audios" in self.user_info["counters"]:
             count = self.user_info["counters"]["audios"]
             if count != 0:
                 return "{}\n".format(
                     numeral.get_plural(count, "аудиозапись, аудиозаписи, аудиозаписей")
                 )
-            else:
-                # Аудиозаписи скрыты или их нет
-                return ""
-        else:
-            return ""
+        return ""
 
-    def get_user_videos(self):
+    def get_user_videos(self) -> str:
         if "videos" in self.user_info["counters"]:
             count = self.user_info["counters"]["videos"]
             if count != 0:
                 return f"{count} видео\n"
-            else:
-                # Видео скрыты или их нет
-                return ""
-        else:
-            return ""
 
-    def get_user_friends(self):
+        return ""
+
+    def get_user_friends(self) -> str:
         if "friends" in self.user_info["counters"]:
             count = self.user_info["counters"]["friends"]
             if count != 0:
                 return "{}\n".format(
                     numeral.get_plural(count, "друг, друга, друзей")
                 )
-            else:
-                # Друзья скрыты или их нет
-                return ""
-        else:
-            return ""
 
-    def get_user_followers(self):
+        return ""
+
+    def get_user_followers(self) -> str:
         if "followers" in self.user_info["counters"]:
             count = self.user_info["counters"]["followers"]
             if count != 0:
                 return "{}\n".format(
                     numeral.get_plural(count, "подписчик, подписчика, подписчиков")
                 )
-            else:
-                # Подписчики скрыты или их нет
-                return ""
-        else:
-            return ""
 
-    def get_user_groups(self):
+        return ""
+
+    def get_user_groups(self) -> str:
         if "groups" in self.user_info["counters"]:
             count = self.user_info["counters"]["groups"]
             if count != 0:
                 return "{}\n".format(
                     numeral.get_plural(count, "группа, группы, групп")
                 )
-            else:
-                # Группы скрыты или их нет
-                return ""
-        else:
-            return ""
 
-    def get_user_info(self, user_id):
+        return ""
+
+    def get_user_info(self, user_id: int) -> dict:
         self.user_info = self.vk.users.get(
             user_ids=user_id,
             fields="sex, status, counters, photo_max_orig"
         )[0]
 
+        message = ""
+        message += self.get_username(user_id) + "\n"
+        message += f"id - {user_id}\n"
+        message += self.get_user_last_activity(user_id, self.user_info['sex'])
+        message += self.get_user_status()
+
         if self.user_info["is_closed"]:
             # Профиль пользователя закрыт
-            res = "{} {} {} {} {}".format(
-                f"{self.get_username(user_id)}\n",
-                f"id - {user_id}\n",
-                self.get_user_last_activity(user_id, self.user_info["sex"]),
-                self.get_user_status(),
-                "Профиль закрыт ❌\n"
-            )
-
-            if self.get_user_profile_photo():
-                # У пользователя есть аватарка
-                res += "Аватарка"
-                return {
-                    "message": res,
-                    "attachment": self.get_user_profile_photo()
-                }
-            else:
-                # У пользователя нет аватарки
-                res += "Аватарки нет"
-                return {
-                    "message": res,
-                    "attachment": ""
-                }
+            message += "Профиль закрыт ❌\n"
         else:
             # Профиль пользователя открыт
-            res = "{} {} {} {} {} {} {} {} {} {} {}".format(
-                f"{self.get_username(user_id)}\n",
-                f"id - {user_id}\n",
-                self.get_user_last_activity(user_id, self.user_info["sex"]),
-                self.get_user_status(),
-                "Профиль открыт ✅\n",
-                self.get_user_photos(),
-                self.get_user_audios(),
-                self.get_user_videos(),
-                self.get_user_friends(),
-                self.get_user_followers(),
-                self.get_user_groups()
-            )
+            message += "Профиль открыт ✅\n"
+            message += self.get_user_photos()
+            message += self.get_user_audios()
+            message += self.get_user_videos()
+            message += self.get_user_friends()
+            message += self.get_user_followers()
+            message += self.get_user_groups()
 
-            if self.get_user_profile_photo():
-                # У пользователя есть аватарка
-                res += "Аватарка"
-                return {
-                    "message": res,
-                    "attachment": self.get_user_profile_photo()
-                }
-            else:
-                # У пользователя нет аватарки
-                res += "Аватарки нет"
-                return {
-                    "message": res,
-                    "attachment": ""
-                }
+        return {
+            "message": message,
+            "attachment": self.get_user_profile_photo()
+        }
 
 
 class Group(object):
@@ -219,7 +172,7 @@ class Group(object):
         self.vk = vk
         self.upload = upload
 
-    def get_group_owner(self, group_id):
+    def get_group_owner(self, group_id: int) -> str:
         try:
             owner_id = self.vk.groups.getMembers(
                 group_id=group_id,
@@ -230,22 +183,21 @@ class Group(object):
         except vk_api.exceptions.ApiError:
             return ""
 
-    def get_group_info(self, group_id):
+    def get_group_info(self, group_id: int) -> dict:
         """Отправляет сообщение с информацией о группе."""
         group_info = self.vk.groups.getById(group_id=group_id)[0]
 
         max_size = list(group_info)[-1]
         photo_url = group_info[max_size]
 
-        res = "{} {} {} {}".format(
-            f"{group_info['name']}\n",
-            f"id - {group_info['id']}\n",
-            self.get_group_owner(group_id),
-            "Аватарка",
-        )
+        message = ""
+        message += f"{group_info['name']}\n"
+        message += f"id - {group_info['id']}\n"
+        message += self.get_group_owner(group_id)
+        message += "Аватарка"
 
         return {
-            "message": res,
+            "message": message,
             "attachment": utils.get_photo_by_url(photo_url)
         }
 
@@ -256,9 +208,11 @@ class Chat(object):
         self.upload = upload
         self.bot = bot
 
-    def get_chat_photo(self, chat_info):
-        """Вовращает фото беседы если оно у неё есть,
-        иначе вовращает пустую строку."""
+    def get_chat_photo(self, chat_info: dict) -> str:
+        """
+        Вовращает фото беседы если оно у неё есть,
+        иначе вовращает пустую строку.
+        """
         if "photo" in chat_info:
             sizes = chat_info["photo"]
             max_size = list(sizes)[-2]
@@ -268,7 +222,7 @@ class Chat(object):
         else:
             return ""
 
-    def get_chat_info(self, chat_id):
+    def get_chat_info(self, chat_id: int) -> dict:
         """Отправляет сообщение с информацией о беседе."""
 
         chat_info = self.bot.messages.getConversationsById(
@@ -280,28 +234,18 @@ class Chat(object):
         members_count = chat_info["members_count"]
         owner_id = chat_info["owner_id"]
 
-        chat_photo = self.get_chat_photo(chat_info)
-
-        if chat_photo != "":
-            res = "{} {} {} {}".format(
-                f"Название - {chat_name}\n",
-                "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников")),
-                f"Создатель - {user.get_username(owner_id)}\n",
-                "Аватарка"
-            )
-        else:
-            res = "{} {} {}".format(
-                f"Название - {chat_name}\n",
-                "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников")),
-                f"Создатель - {user.get_username(owner_id)}\n"
-            )
+        message = ""
+        message += "Название - {chat_name}\n"
+        message += "{}\n".format(numeral.get_plural(members_count, "участник, участника, участников"))
+        message += f"Создатель - {user.get_username(owner_id)}\n"
+        message += "Аватарка"
 
         return {
-            "message": res,
-            "attachment": chat_photo
+            "message": message,
+            "attachment": self.get_chat_photo(chat_info)
         }
 
-    def check_rights(self, user_id, chat_id):
+    def is_admin(self, user_id: int, chat_id: int) -> bool:
         """Проверяем, является ли пользователь администратором беседы"""
         chat_members = self.bot.messages.getConversationMembers(
             peer_id=2000000000 + chat_id,
@@ -317,7 +261,7 @@ class Chat(object):
 
         return is_admin
 
-    def ban_user(self, from_id, user_id, chat_id):
+    def ban_user(self, from_id: int, user_id: int, chat_id: int):
         if from_id == user_id:
             self.bot.messages.send(
                 chat_id=chat_id,
@@ -325,14 +269,14 @@ class Chat(object):
                 random_id=get_random_id()
             )
 
-        elif not self.check_rights(from_id, chat_id):
+        elif not self.is_admin(from_id,chat_id):
             self.bot.messages.send(
                 chat_id=chat_id,
                 message="У вас недостаточно прав для использования этой команды",
                 random_id=get_random_id()
             )
 
-        elif self.check_rights(from_id, chat_id):
+        elif self.is_admin(from_id, chat_id):
             self.bot.messages.removeChatUser(
                 chat_id=chat_id,
                 user_id=user_id
@@ -352,18 +296,17 @@ class Bot(object):
         self.bot = bot
         self.longpoll = longpoll
 
-    def get_help(self, chat_id):
-        res = "{}{}{}{}".format(
-            "Список команд\n",
-            "!инфо беседа\n",
-            "!инфо @(Имя пользователя)\n\n",
-            "Доступно только администраторам\n"
-            "!бан @(Имя пользователя)"
-        )
+    def _get_help(self, chat_id: int):
+        message = "Список команд\n" \
+                  "!инфо беседа\n" \
+                  "!инфо @(Имя пользователя) или id(id пользователя)\n" \
+                  "!инфо @(название группы) или @public(id группы)\n\n" \
+                  "Доступно только администраторам\n" \
+                  "!бан @(Имя пользователя)"
 
         self.bot.messages.send(
             chat_id=chat_id,
-            message=res,
+            message=message,
             random_id=get_random_id()
         )
 
@@ -378,7 +321,7 @@ class Bot(object):
                     random_id=get_random_id()
                 )
             elif re.match("!инфо id", received_message):
-                user_id = int(received_message[8:17])
+                user_id = int(received_message.split("id")[1].split("|")[0])
                 data = user.get_user_info(user_id)
                 self.bot.messages.send(
                     chat_id=chat_id,
@@ -387,7 +330,7 @@ class Bot(object):
                     random_id=get_random_id()
                 )
             elif re.match("!инфо club", received_message):
-                group_id = int(received_message[10:19])
+                group_id = int(received_message.split("club")[1].split("|")[0])
                 data = group.get_group_info(group_id)
                 self.bot.messages.send(
                     chat_id=chat_id,
@@ -401,42 +344,47 @@ class Bot(object):
                     message="Такой команды не существует",
                     random_id=get_random_id()
                 )
+
         elif re.match("!бан id", received_message):
-            user_id = int(received_message[7:16])
+            user_id = int(received_message.split("id")[1].split("|")[0])
             chat.ban_user(
                 from_id=self.from_id,
                 user_id=user_id,
                 chat_id=chat_id
             )
-        elif received_message == "!help":
-            self.get_help(chat_id)
+        elif received_message == "!помощь":
+            self._get_help(chat_id)
 
-    def run(self):
+    def listen(self):
         print("Начинаю мониторинг сообщений...")
 
-        """Отслеживаем каждое событие в беседе."""
-        for event in self.longpoll.listen():
-            if event.type == VkBotEventType.MESSAGE_NEW and event.from_chat and event.message.get("text") != "":
-                received_message = event.message.get("text").lower().replace("[", "").replace("]", "")
-                chat_id = event.chat_id
-                self.from_id = event.message.get("from_id")
-                self.check_message(received_message, chat_id)
+        while True:
+            try:
+                """Отслеживаем каждое событие в беседе."""
+                for event in self.longpoll.listen():
+                    if event.type == VkBotEventType.MESSAGE_NEW and event.from_chat and event.message.get("text") != "":
+                        received_message = event.message.get("text").lower().replace("[", "").replace("]", "")
+                        chat_id = event.chat_id
+                        self.from_id = event.message.get("from_id")
+                        self.check_message(received_message, chat_id)
+            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
+                print(e)
 
                 
 if __name__ == "__main__":
+    # Авторизируем бота
     authorize = vk_api.VkApi(token=config["group"]["group_token"])
     longpoll = VkBotLongPoll(
         authorize,
         group_id=config["group"]["group_id"]
     )
-
     upload = vk_api.VkUpload(authorize)
     bot = authorize.get_api()
 
+    # Авторизируем пользователя
     vk_session = vk_api.VkApi(
         token=config["user"]["user_token"]
     )
-
     vk = vk_session.get_api()
 
     vkbot = Bot(
@@ -464,4 +412,4 @@ if __name__ == "__main__":
         bot=bot
     )
 
-    vkbot.run()
+    vkbot.listen()  # Запускаем мониторинг бесед
